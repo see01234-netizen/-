@@ -1,0 +1,5 @@
+{
+  "name": "DerbyAI - Horse Racing Predictor",
+  "description": "An AI-powered horse racing prediction tool that analyzes race conditions, jockey performance, and horse history to forecast winners.",
+  "requestFramePermissions": []
+}
