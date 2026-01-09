@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Horse, RaceConditions, AnalysisResponse, Source, HistoryItem, RaceData } from './types';
+import { Horse, RaceConditions, AnalysisResponse, Source, RaceData } from './types';
 import { INITIAL_RACE_CONDITIONS, MOCK_HORSES } from './constants';
 import { analyzeRace, analyzeRaceCardPDF } from './services/geminiService';
 import { RaceTable } from './components/RaceTable'; 
@@ -22,12 +22,12 @@ import {
   Quote,
   RefreshCw,
   FastForward,
-  History,
   X,
   ChevronRight,
   Trash2,
   Calendar,
-  List
+  List,
+  ExternalLink
 } from 'lucide-react';
 
 const getGateColorClass = (index: number) => {
@@ -62,9 +62,7 @@ const App: React.FC = () => {
   const [result, setResult] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   
-  // UI & History States
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  // UI States
   const [sources, setSources] = useState<Source[]>([]);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
 
@@ -117,18 +115,6 @@ const App: React.FC = () => {
   };
 
   // --- Effects ---
-
-  // Load History
-  useEffect(() => {
-    const savedHistory = localStorage.getItem('derbyai_history');
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error("Failed to parse history", e);
-      }
-    }
-  }, []);
 
   // Real-time Clock
   useEffect(() => {
@@ -289,9 +275,6 @@ const App: React.FC = () => {
         ...prev,
         [key]: analysis
       }));
-      
-      // Add to history automatically
-      addToHistory(raceData, analysis);
     } catch (err: any) {
       console.error(err);
       setError("경기 분석에 실패했습니다. " + (err.message || "다시 시도해주세요."));
@@ -308,31 +291,6 @@ const App: React.FC = () => {
         const manualRaceData = { conditions, horses };
         performAnalysis(manualRaceData as RaceData);
     }
-  };
-
-  const addToHistory = (raceData: RaceData, analysis: AnalysisResponse) => {
-    const newItem: HistoryItem = {
-      id: Date.now().toString(),
-      timestamp: Date.now(),
-      conditions: raceData.conditions,
-      horses: raceData.horses,
-      result: analysis
-    };
-    const updatedHistory = [newItem, ...history];
-    setHistory(updatedHistory);
-    localStorage.setItem('derbyai_history', JSON.stringify(updatedHistory));
-  };
-
-  const loadFromHistory = (item: HistoryItem) => {
-    // When loading history, we enter a "view only" mode essentially
-    // But to keep it compatible with the multi-race view, we might want to just set current conditions
-    setConditions(item.conditions);
-    setHorses(item.horses);
-    setResult(item.result);
-    // We clear allRaces to indicate we are in history view mode or custom mode
-    setAllRaces([]); 
-    setIsHistoryOpen(false);
-    setError(null);
   };
 
   const handleAddHorse = () => {
@@ -360,69 +318,31 @@ const App: React.FC = () => {
       
       {/* Top Navigation Bar */}
       <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
-        <div className="max-w-[95%] mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-emerald-600 p-1.5 rounded text-white transform -rotate-6">
-              <Trophy size={18} fill="currentColor" />
+        <div className="max-w-[95%] mx-auto px-3 md:px-4 h-14 md:h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="bg-emerald-600 p-1.5 rounded text-white transform -rotate-6 scale-90 md:scale-100">
+              <Trophy size={18} md:size={20} fill="currentColor" />
             </div>
-            <span className="font-black text-lg tracking-tight text-white">DerbyAI <span className="text-emerald-500 text-xs font-normal align-top">PDF</span></span>
+            <span className="font-black text-lg md:text-xl tracking-tight text-white">
+              DerbyAI <span className="text-emerald-500 text-[10px] md:text-xs font-normal align-top">PDF</span>
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
-             <div className="hidden sm:flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700">
-               <Clock size={14} className="text-emerald-500" />
-               <span className="font-mono font-bold text-sm text-slate-200">{currentTime}</span>
+             <div className="flex items-center gap-2 md:gap-3 bg-slate-800/50 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-slate-700/50 shadow-inner">
+               <Clock size={16} className="text-emerald-500 md:w-5 md:h-5" />
+               <span className="font-mono font-bold text-lg md:text-2xl text-slate-100 tracking-wide">{currentTime}</span>
              </div>
-             <button 
-               onClick={() => setIsHistoryOpen(true)}
-               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
-             >
-               <History size={16} />
-               <span className="text-xs font-bold hidden sm:inline">기록실</span>
-             </button>
           </div>
         </div>
       </nav>
 
-      {/* History Sidebar (Same as before) */}
-      <div className={`fixed inset-0 z-[60] flex justify-end transition-opacity duration-300 ${isHistoryOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsHistoryOpen(false)}></div>
-         <div className={`relative w-full max-w-sm h-full bg-slate-900 border-l border-slate-700 shadow-2xl transform transition-transform duration-300 flex flex-col ${isHistoryOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                 <History size={18} className="text-emerald-500" />
-                 분석 기록실
-               </h2>
-               <button onClick={() => setIsHistoryOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-full">
-                 <X size={20} />
-               </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-               {history.length === 0 ? (
-                 <div className="text-center py-10 text-slate-500">기록이 없습니다.</div>
-               ) : (
-                 history.map((item) => (
-                   <div key={item.id} onClick={() => loadFromHistory(item)} className="bg-slate-800 border border-slate-700 rounded-xl p-3 cursor-pointer hover:border-emerald-500/50 transition-all">
-                      <div className="flex justify-between">
-                         <span className="text-emerald-400 font-bold">{item.conditions.raceNumber}경주 - {item.conditions.location}</span>
-                         <span className="text-xs text-slate-500">{new Date(item.timestamp).toLocaleDateString()}</span>
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1">
-                         {item.result.predictions?.[0]?.horseName} (우승확률 {item.result.predictions?.[0]?.winProbability}%)
-                      </div>
-                   </div>
-                 ))
-               )}
-            </div>
-         </div>
-      </div>
-
       {/* Main Container */}
-      <main className="max-w-[95%] mx-auto px-4 py-6">
+      <main className="w-full max-w-[98%] md:max-w-[95%] mx-auto px-2 md:px-4 py-4 md:py-6">
         
         {/* Race Selector Bar (Horizontal Scroll) */}
         {allRaces.length > 0 && (
-          <div className="mb-6 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="mb-4 md:mb-6 overflow-x-auto pb-2 scrollbar-hide -mx-2 px-2 md:mx-0 md:px-0">
             <div className="flex gap-2 min-w-max">
               {allRaces.map((race, idx) => {
                 const isActive = idx === currentRaceIdx;
@@ -437,23 +357,23 @@ const App: React.FC = () => {
                     key={idx}
                     onClick={() => setCurrentRaceIdx(idx)}
                     className={`
-                      flex flex-col items-center justify-center px-4 py-2 rounded-xl border transition-all min-w-[90px]
+                      flex flex-col items-center justify-center px-3 py-2 md:px-4 md:py-3 rounded-xl border transition-all min-w-[85px] md:min-w-[100px]
                       ${getLocationStyles(locationShort, isActive)}
                     `}
                   >
-                    <div className="flex flex-col items-center leading-none mb-1">
-                        <span className={`text-[10px] font-bold mb-1 ${isActive ? 'text-white/90' : 'text-current opacity-80'}`}>
+                    <div className="flex flex-col items-center leading-none mb-1 md:mb-2">
+                        <span className={`text-[10px] md:text-[11px] font-bold mb-0.5 ${isActive ? 'text-white/90' : 'text-current opacity-80'}`}>
                            {locationShort}
                         </span>
-                        <span className="text-sm font-black uppercase tracking-wider">
+                        <span className="text-xs md:text-sm font-black uppercase tracking-wider">
                            {race.conditions.raceNumber}경주
                         </span>
                     </div>
-                    <span className={`text-base font-bold font-mono ${isActive ? 'text-white' : 'text-slate-400'}`}>
+                    <span className={`text-lg md:text-xl font-bold font-mono ${isActive ? 'text-white' : 'text-slate-400'}`}>
                       {timeString}
                     </span>
                     {hasResult && (
-                      <span className="text-[10px] bg-white/20 text-white px-1.5 rounded-full mt-1">분석완료</span>
+                      <span className="text-[9px] md:text-[10px] bg-white/20 text-white px-1.5 rounded-full mt-1">분석완료</span>
                     )}
                   </button>
                 );
@@ -463,11 +383,11 @@ const App: React.FC = () => {
         )}
 
         {/* Race Dashboard Header */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-0 mb-6 overflow-hidden shadow-lg">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 rounded-xl p-0 mb-4 md:mb-6 overflow-hidden shadow-lg">
           <div className="flex flex-col md:flex-row">
             
             {/* Left: PDF Upload & Status */}
-            <div className="p-5 border-b md:border-b-0 md:border-r border-slate-700 bg-slate-800/50 w-full md:w-1/3 flex flex-col justify-center">
+            <div className="p-3 md:p-5 border-b md:border-b-0 md:border-r border-slate-700 bg-slate-800/50 w-full md:w-1/3 flex flex-col justify-center">
                <input 
                   type="file" 
                   accept="application/pdf" 
@@ -477,66 +397,92 @@ const App: React.FC = () => {
                 />
                 
                 {allRaces.length === 0 ? (
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessingPdf || loading}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg p-4 rounded-xl transition-all flex items-center justify-center gap-3 h-full max-h-[100px]"
-                  >
-                    {isProcessingPdf ? (
-                      <>
-                        <Loader2 size={24} className="animate-spin" />
-                        <span>전체 경기 분석 중...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={24} />
-                        <div className="text-left">
-                           <span className="block font-bold text-lg">출주표 PDF 업로드</span>
-                           <span className="text-xs opacity-80">오늘의 전체 경주 파일</span>
-                        </div>
-                      </>
-                    )}
-                  </button>
+                  <div className="space-y-3 md:space-y-4">
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isProcessingPdf || loading}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-lg p-3 md:p-4 rounded-xl transition-all flex items-center justify-center gap-3 h-20 md:h-24"
+                    >
+                      {isProcessingPdf ? (
+                        <>
+                          <Loader2 size={20} className="animate-spin" />
+                          <span className="text-sm md:text-base">분석 중...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={20} className="md:w-6 md:h-6" />
+                          <div className="text-left">
+                            <span className="block font-bold text-base md:text-lg">출주표 PDF 업로드</span>
+                            <span className="text-[10px] md:text-xs opacity-80">오늘의 전체 경주 파일</span>
+                          </div>
+                        </>
+                      )}
+                    </button>
+
+                    <div className="bg-slate-900/50 rounded-lg p-2 md:p-3 border border-slate-700/50 text-center">
+                        <a 
+                          href="https://www.krking.net/krPaper/YsPaper.asp" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="flex items-center justify-center gap-2 text-emerald-400 font-bold hover:text-emerald-300 transition-colors text-sm md:text-base"
+                        >
+                          <ExternalLink size={14} className="md:w-4 md:h-4" />
+                          <span>예측 PDF 다운 (KRKing)</span>
+                        </a>
+                        <p className="text-[10px] md:text-xs text-slate-500 mt-1">위 사이트에서 오늘 '출주표' PDF를 받으세요.</p>
+                    </div>
+                  </div>
                 ) : (
                    <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                           <span className="bg-emerald-500 text-black px-2 rounded text-lg">{conditions.raceNumber}R</span>
+                        <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2">
+                           <span className="bg-emerald-500 text-black px-2 rounded text-base md:text-lg">{conditions.raceNumber}R</span>
                            {conditions.location}
                         </h2>
-                        <div className="text-slate-400 text-xs mt-1 flex items-center gap-2">
+                        <div className="text-slate-400 text-[10px] md:text-xs mt-1 flex items-center gap-2">
                            <Calendar size={12}/> {conditions.raceTime?.split(' ')[0] || '날짜 미정'}
-                           {allRaces.length > 1 && <span className="bg-slate-700 px-2 rounded-full text-white">{allRaces.length}개 경주 로드됨</span>}
+                           {allRaces.length > 1 && <span className="bg-slate-700 px-2 rounded-full text-white hidden sm:inline">{allRaces.length}개 로드됨</span>}
                         </div>
                       </div>
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition-colors"
-                        title="새 파일 업로드"
-                      >
-                        <RefreshCw size={18} />
-                      </button>
+                      <div className="flex gap-2">
+                        <a 
+                          href="https://www.krking.net/krPaper/YsPaper.asp" 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-emerald-400 transition-colors"
+                          title="예상지 사이트"
+                        >
+                          <ExternalLink size={18} />
+                        </a>
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition-colors"
+                          title="새 파일 업로드"
+                        >
+                          <RefreshCw size={18} />
+                        </button>
+                      </div>
                    </div>
                 )}
             </div>
 
             {/* Middle: Race Conditions */}
-            <div className="flex-1 p-5 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center w-full md:w-2/3">
-               <div className="flex flex-col gap-1">
-                 <span className="text-xs text-slate-500 flex items-center gap-1"><Ruler size={12}/> 거리</span>
-                 <span className="font-bold text-lg">{conditions.distance}m</span>
+            <div className="flex-1 p-3 md:p-5 grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 items-center w-full md:w-2/3">
+               <div className="flex flex-col gap-0.5 md:gap-1">
+                 <span className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><Ruler size={10} className="md:w-3 md:h-3"/> 거리</span>
+                 <span className="font-bold text-base md:text-lg">{conditions.distance}m</span>
                </div>
-               <div className="flex flex-col gap-1">
-                 <span className="text-xs text-slate-500 flex items-center gap-1"><Thermometer size={12}/> 주로</span>
-                 <span className="font-bold text-lg truncate" title={conditions.trackCondition}>{conditions.trackCondition}</span>
+               <div className="flex flex-col gap-0.5 md:gap-1">
+                 <span className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><Thermometer size={10} className="md:w-3 md:h-3"/> 주로</span>
+                 <span className="font-bold text-sm md:text-lg truncate" title={conditions.trackCondition}>{conditions.trackCondition}</span>
                </div>
-               <div className="flex flex-col gap-1">
-                 <span className="text-xs text-slate-500 flex items-center gap-1"><CloudSun size={12}/> 날씨</span>
-                 <span className="font-bold text-lg truncate" title={conditions.weather}>{conditions.weather}</span>
+               <div className="flex flex-col gap-0.5 md:gap-1">
+                 <span className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><CloudSun size={10} className="md:w-3 md:h-3"/> 날씨</span>
+                 <span className="font-bold text-sm md:text-lg truncate" title={conditions.weather}>{conditions.weather}</span>
                </div>
-               <div className="flex flex-col gap-1 pl-4 border-l border-slate-700/50">
-                  <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">상태</span>
-                  <div className={`text-xl font-black font-mono tracking-tight flex items-center gap-2 ${isRaceFinished ? 'text-amber-400' : 'text-white'}`}>
+               <div className="flex flex-col gap-0.5 md:gap-1 pl-4 border-l border-slate-700/50">
+                  <span className="text-[10px] md:text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">남은시간</span>
+                  <div className={`text-base md:text-xl font-black font-mono tracking-tight flex items-center gap-2 ${isRaceFinished ? 'text-amber-400' : 'text-white'}`}>
                      {timeLeft || '--:--'}
                   </div>
                </div>
@@ -553,20 +499,20 @@ const App: React.FC = () => {
         )}
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
           
           {/* Left: Horse Table */}
           <div className="lg:col-span-8 space-y-4">
              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <List size={18} className="text-amber-400"/> 출전표 (Race Card)
+                <h2 className="text-base md:text-lg font-bold text-white flex items-center gap-2">
+                  <List size={18} className="text-amber-400"/> 출전표
                 </h2>
                 <div className="flex gap-2">
                   <button 
                     onClick={() => setIsAdding(!isAdding)}
                     className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded border border-slate-700 transition-colors flex items-center gap-1"
                   >
-                    <Plus size={14} /> 수동 추가
+                    <Plus size={14} /> <span className="hidden sm:inline">수동 추가</span>
                   </button>
                 </div>
              </div>
@@ -610,35 +556,14 @@ const App: React.FC = () => {
                </div>
             ) : result ? (
               <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-xl sticky top-20">
-                <div className="p-5 border-b border-slate-700 bg-slate-800/80 backdrop-blur-sm">
-                  <h3 className="font-bold text-emerald-400 flex items-center gap-2 text-lg">
-                     <FileText size={20} /> AI 분석 리포트 ({conditions.raceNumber}R)
+                <div className="p-4 md:p-5 border-b border-slate-700 bg-slate-800/80 backdrop-blur-sm">
+                  <h3 className="font-bold text-emerald-400 flex items-center gap-2 text-base md:text-lg">
+                     <FileText size={18} className="md:w-5 md:h-5" /> AI 분석 리포트 ({conditions.raceNumber}R)
                   </h3>
                 </div>
                 
-                <div className="p-5 space-y-8">
-                  <div>
-                    <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
-                      <Quote size={14} className="text-emerald-500" />
-                      경기 총평
-                    </h4>
-                    <div className="bg-slate-900/40 rounded-xl p-6 border border-slate-700/50">
-                        <p className="text-slate-200 text-[15px] leading-8 font-medium whitespace-pre-line text-justify tracking-wide">
-                          {result.summary}
-                        </p>
-                    </div>
-                  </div>
-
-                  <div>
-                     <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
-                      <BarChart2 size={14} className="text-blue-500" />
-                      우승 확률
-                    </h4>
-                    <div className="w-full bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
-                        <PredictionChart data={result.predictions} horses={horses} />
-                    </div>
-                  </div>
-
+                <div className="p-4 md:p-5 space-y-6 md:space-y-8">
+                  {/* Top 3 Recommendation - Moved to Top */}
                   <div>
                      <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
                       <Trophy size={14} className="text-amber-500" />
@@ -651,8 +576,8 @@ const App: React.FC = () => {
                         const gateColorClass = hIndex !== -1 ? getGateColorClass(hIndex) : 'bg-slate-700 text-slate-300 border-slate-600';
 
                         return (
-                          <div key={idx} className="flex items-start gap-4 bg-slate-700/20 p-4 rounded-xl border border-slate-700/30 hover:bg-slate-700/40 transition-all">
-                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                          <div key={idx} className="flex items-start gap-3 md:gap-4 bg-slate-700/20 p-3 md:p-4 rounded-xl border border-slate-700/30 hover:bg-slate-700/40 transition-all">
+                             <div className={`w-6 h-6 md:w-7 md:h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
                                idx === 0 ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' : 
                                idx === 1 ? 'bg-slate-600 text-white' : 'bg-slate-700 text-slate-300'
                              }`}>
@@ -661,18 +586,42 @@ const App: React.FC = () => {
                              <div className="flex-1 min-w-0">
                                <div className="flex justify-between items-center w-full mb-1.5">
                                   <div className="flex items-center gap-2 truncate">
-                                      <span className={`text-[10px] w-5 h-5 flex items-center justify-center rounded-full border font-bold ${gateColorClass}`}>
+                                      <span className={`text-[10px] w-4 h-4 md:w-5 md:h-5 flex items-center justify-center rounded-full border font-bold ${gateColorClass}`}>
                                           {gateNo}
                                       </span>
-                                      <span className="font-bold text-slate-100 text-base truncate">{pred.horseName}</span>
+                                      <span className="font-bold text-slate-100 text-sm md:text-base truncate">{pred.horseName}</span>
                                   </div>
-                                  <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md ml-2 whitespace-nowrap">{pred.winProbability}%</span>
+                                  <span className="text-[10px] md:text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md ml-2 whitespace-nowrap">{pred.winProbability}%</span>
                                </div>
-                               <p className="text-sm text-slate-400 leading-snug">{pred.reasoning}</p>
+                               <p className="text-xs md:text-sm text-slate-400 leading-snug">{pred.reasoning}</p>
                              </div>
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div>
+                    <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
+                      <Quote size={14} className="text-emerald-500" />
+                      경기 총평
+                    </h4>
+                    <div className="bg-slate-900/40 rounded-xl p-4 md:p-6 border border-slate-700/50">
+                        <p className="text-slate-200 text-sm md:text-[15px] leading-7 md:leading-8 font-medium whitespace-pre-line text-justify tracking-wide">
+                          {result.summary}
+                        </p>
+                    </div>
+                  </div>
+
+                  {/* Chart */}
+                  <div>
+                     <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
+                      <BarChart2 size={14} className="text-blue-500" />
+                      우승 확률
+                    </h4>
+                    <div className="w-full bg-slate-900/20 rounded-lg p-3 border border-slate-700/30">
+                        <PredictionChart data={result.predictions} horses={horses} />
                     </div>
                   </div>
                 </div>

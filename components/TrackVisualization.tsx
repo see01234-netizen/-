@@ -66,37 +66,37 @@ export const TrackVisualization: React.FC<TrackVisualizationProps> = ({ horses, 
   });
 
   return (
-    <div className="w-full bg-slate-800 border border-slate-600 rounded-xl overflow-hidden shadow-xl mt-6">
-      <div className="p-4 bg-slate-800 border-b border-slate-600 flex justify-between items-center">
-        <h3 className="font-bold text-emerald-400 flex items-center gap-2">
-          <span className="text-xl">🏁</span> AI 예상 결승선 통과 순서 (Finish Order)
+    <div className="w-full bg-slate-800 border border-slate-600 rounded-xl overflow-hidden shadow-xl mt-4 md:mt-6">
+      <div className="p-3 md:p-4 bg-slate-800 border-b border-slate-600 flex justify-between items-center">
+        <h3 className="font-bold text-emerald-400 flex items-center gap-2 text-sm md:text-base">
+          <span className="text-lg md:text-xl">🏁</span> 예상 결승선 통과 순서
         </h3>
-        <div className="flex gap-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
-          <span className="flex items-center gap-1">◀ Trailing (후미)</span>
-          <span className="flex items-center gap-1">Winner (우승) ▶</span>
+        <div className="hidden sm:flex gap-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
+          <span className="flex items-center gap-1">◀ 후미</span>
+          <span className="flex items-center gap-1">우승 ▶</span>
         </div>
       </div>
       
-      {/* Track Surface - Lighter Green for better visibility */}
-      <div className="relative w-full h-72 bg-[#2d5a35] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+      {/* Track Surface */}
+      <div className="relative w-full h-60 md:h-72 bg-[#2d5a35] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
         
         {/* Grass Texture */}
         <div className="absolute inset-0 opacity-40" 
              style={{ backgroundImage: 'radial-gradient(#1a3c22 1px, transparent 1px)', backgroundSize: '16px 16px' }}>
         </div>
         
-        {/* Distance Lines - Stronger visibility */}
+        {/* Distance Lines */}
         <div className="absolute top-0 bottom-0 left-[25%] w-px bg-white/20 border-l border-dashed border-white/40"></div>
         <div className="absolute top-0 bottom-0 left-[50%] w-px bg-white/20 border-l border-dashed border-white/40"></div>
         <div className="absolute top-0 bottom-0 left-[75%] w-px bg-white/20 border-l border-dashed border-white/40"></div>
         
-        {/* Finish Line (Right side) - Red Line with Glow */}
-        <div className="absolute top-0 bottom-0 right-12 w-8 bg-white/10 flex items-center justify-center">
+        {/* Finish Line (Right side) */}
+        <div className="absolute top-0 bottom-0 right-8 md:right-12 w-6 md:w-8 bg-white/10 flex items-center justify-center">
             <div className="h-full w-1 bg-red-500 shadow-[0_0_15px_rgba(239,68,68,1)] z-0"></div>
         </div>
-        <div className="absolute top-2 right-4 text-[10px] font-black text-red-400 tracking-widest rotate-90 origin-right">FINISH</div>
+        <div className="absolute top-2 right-2 md:right-4 text-[8px] md:text-[10px] font-black text-red-400 tracking-widest rotate-90 origin-right">FINISH</div>
 
-        {/* Rails - Brighter grey for contrast */}
+        {/* Rails */}
         <div className="absolute top-3 left-0 right-0 h-2 bg-slate-300 border-b-2 border-slate-400 shadow-md z-10"></div> {/* Outer Rail */}
         <div className="absolute bottom-3 left-0 right-0 h-2 bg-slate-300 border-t-2 border-slate-400 shadow-md z-10"></div> {/* Inner Rail */}
 
@@ -115,30 +115,30 @@ export const TrackVisualization: React.FC<TrackVisualizationProps> = ({ horses, 
                 zIndex: isWinner ? 30 : 20
               }}
             >
-              {/* Horse Marker (Circle with Gate Number) */}
+              {/* Horse Marker */}
               <div 
                 className={`
-                  w-9 h-9 rounded-full flex items-center justify-center font-black text-sm border-2
+                  w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center font-black text-xs md:text-sm border-2
                   ${style.bg} ${style.text} ${style.border} ${style.shadow}
                   group-hover:scale-125 transition-transform relative
-                  ${isWinner ? 'ring-4 ring-emerald-500/50 scale-110' : ''}
+                  ${isWinner ? 'ring-2 md:ring-4 ring-emerald-500/50 scale-110' : ''}
                 `}
               >
                 {horse.gateNo}
                 
                 {/* Speed Lines for leaders */}
                 {isWinner && (
-                  <div className={`absolute right-full top-1/2 -translate-y-1/2 w-8 h-6 bg-gradient-to-l from-white/40 to-transparent blur-[2px] -z-10 rounded-l-full`}></div>
+                  <div className={`absolute right-full top-1/2 -translate-y-1/2 w-6 md:w-8 h-4 md:h-6 bg-gradient-to-l from-white/40 to-transparent blur-[2px] -z-10 rounded-l-full`}></div>
                 )}
               </div>
 
-              {/* Tooltip on Hover */}
-              <div className="absolute bottom-full mb-3 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/95 text-white text-xs py-1.5 px-3 rounded-lg border border-slate-500 whitespace-nowrap z-50 pointer-events-none shadow-xl transform group-hover:-translate-y-1">
+              {/* Tooltip on Hover (or Click on Touch) */}
+              <div className="absolute bottom-full mb-2 md:mb-3 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/95 text-white text-[10px] md:text-xs py-1 px-2 md:py-1.5 md:px-3 rounded-lg border border-slate-500 whitespace-nowrap z-50 pointer-events-none shadow-xl transform group-hover:-translate-y-1">
                  <div className="flex items-center gap-2 mb-1">
-                   <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${style.bg} ${style.text}`}>{horse.gateNo}</span>
-                   <span className="font-bold text-sm">{horse.name}</span>
+                   <span className={`w-3 h-3 md:w-4 md:h-4 rounded-full flex items-center justify-center text-[8px] md:text-[9px] font-bold ${style.bg} ${style.text}`}>{horse.gateNo}</span>
+                   <span className="font-bold">{horse.name}</span>
                  </div>
-                 <span className="block text-[10px] text-emerald-400 font-mono text-center bg-slate-800 rounded px-1">
+                 <span className="block text-emerald-400 font-mono text-center bg-slate-800 rounded px-1">
                     예상 {horse.rank}위 ({horse.prediction?.winProbability}%)
                  </span>
               </div>
@@ -147,9 +147,8 @@ export const TrackVisualization: React.FC<TrackVisualizationProps> = ({ horses, 
         })}
       </div>
       
-      <div className="bg-slate-800 px-4 py-3 text-[11px] text-slate-400 flex justify-between border-t border-slate-600">
-        <span className="flex items-center gap-1">📌 승률 기반 예상 도착 순서입니다. 오른쪽(결승선)에 가까울수록 우승 확률이 높습니다.</span>
-        <span className="font-bold text-slate-300">내측 펜스 (Inner Rail) ▼</span>
+      <div className="bg-slate-800 px-3 py-2 md:px-4 md:py-3 text-[10px] md:text-[11px] text-slate-400 flex justify-between border-t border-slate-600">
+        <span className="flex items-center gap-1 truncate">📌 우측(결승선)에 가까울수록 우승 확률이 높습니다.</span>
       </div>
     </div>
   );
