@@ -27,7 +27,8 @@ import {
   Trash2,
   Calendar,
   List,
-  ExternalLink
+  ExternalLink,
+  Download
 } from 'lucide-react';
 
 const getGateColorClass = (index: number) => {
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   // UI States
   const [sources, setSources] = useState<Source[]>([]);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<any>(null); // PWA Install Prompt
 
   // Timer State
   const [timeLeft, setTimeLeft] = useState<string>('');
@@ -115,6 +117,20 @@ const App: React.FC = () => {
   };
 
   // --- Effects ---
+
+  // PWA Install Prompt Listener
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
 
   // Real-time Clock
   useEffect(() => {
@@ -184,6 +200,15 @@ const App: React.FC = () => {
   }, [conditions.raceTime]);
 
   // --- Handlers ---
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -328,13 +353,37 @@ const App: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
+             {/* Install Button */}
+             {installPrompt && (
+               <button 
+                 onClick={handleInstallClick}
+                 className="hidden md:flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-full text-sm font-bold transition-all shadow-lg animate-pulse"
+               >
+                 <Download size={16} />
+                 앱 설치
+               </button>
+             )}
+
              <div className="flex items-center gap-2 md:gap-3 bg-slate-800/50 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-slate-700/50 shadow-inner">
                <Clock size={16} className="text-emerald-500 md:w-5 md:h-5" />
                <span className="font-mono font-bold text-lg md:text-2xl text-slate-100 tracking-wide">{currentTime}</span>
              </div>
           </div>
         </div>
+        
+        {/* Mobile Install Button Banner (Visible only if prompt exists) */}
+        {installPrompt && (
+          <div className="md:hidden bg-emerald-900/50 border-b border-emerald-800/50 px-4 py-2 flex justify-between items-center">
+             <span className="text-xs text-emerald-200">앱으로 설치하여 더 편하게 이용하세요!</span>
+             <button 
+               onClick={handleInstallClick}
+               className="bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold flex items-center gap-1"
+             >
+               <Download size={12} /> 설치
+             </button>
+          </div>
+        )}
       </nav>
 
       {/* Main Container */}
