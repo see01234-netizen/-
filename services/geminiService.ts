@@ -120,6 +120,11 @@ export const analyzeRaceCardPDF = async (base64File: string, fileName?: string):
           { text: prompt }
         ]
       },
+      // Ensure PDF extraction is also deterministic
+      config: {
+        temperature: 0,
+        seed: 42
+      }
     });
 
     if (response.text) {
@@ -230,7 +235,10 @@ export const analyzeRace = async (
       model: "gemini-3-flash-preview", 
       contents: prompt,
       config: {
-        responseMimeType: "application/json"
+        responseMimeType: "application/json",
+        // Force deterministic output
+        temperature: 0,
+        seed: 42,
       }
     });
 
