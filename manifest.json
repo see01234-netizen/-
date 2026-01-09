@@ -1,0 +1,18 @@
+{
+  "name": "경마예측 by 성국",
+  "short_name": "경마예측",
+  "description": "AI 기반 경마 출주표 분석 및 우승마 예측 프로그램",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -324,7 +324,7 @@ const App: React.FC = () => {
               <Trophy size={18} md:size={20} fill="currentColor" />
             </div>
             <span className="font-black text-lg md:text-xl tracking-tight text-white">
-              DerbyAI <span className="text-emerald-500 text-[10px] md:text-xs font-normal align-top">PDF</span>
+              경마예측 <span className="text-emerald-500 text-xs md:text-sm font-normal align-baseline">by 성국</span>
             </span>
           </div>
 
