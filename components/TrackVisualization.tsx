@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Horse, PredictionResult } from '../types';
+import { Play, RotateCcw, Flag, Trophy } from 'lucide-react';
 
 interface TrackVisualizationProps {
   horses: Horse[];
@@ -24,6 +25,44 @@ const getGateStyle = (index: number) => {
 };
 
 export const TrackVisualization: React.FC<TrackVisualizationProps> = ({ horses, predictions }) => {
+  // Animation States
+  const [raceStatus, setRaceStatus] = useState<'idle' | 'racing' | 'finished'>('idle');
+  const [progress, setProgress] = useState(0); // 0 to 100
+  const requestRef = useRef<number>(0);
+  const startTimeRef = useRef<number>(0);
+
+  // Constants
+  const DURATION = 5000; // 5 seconds race
+  const FINISH_LINE_X = 92;
+  const START_GATE_X = 5;
+
+  // Reset simulation when data changes
+  useEffect(() => {
+    setRaceStatus('idle');
+    setProgress(0);
+    cancelAnimationFrame(requestRef.current);
+  }, [horses, predictions]);
+
+  const startSimulation = () => {
+    setRaceStatus('racing');
+    setProgress(0);
+    startTimeRef.current = performance.now();
+    requestRef.current = requestAnimationFrame(animate);
+  };
+
+  const animate = (time: number) => {
+    const elapsed = time - startTimeRef.current;
+    const newProgress = Math.min((elapsed / DURATION) * 100, 100);
+    
+    setProgress(newProgress);
+
+    if (newProgress < 100) {
+      requestRef.current = requestAnimationFrame(animate);
+    } else {
+      setRaceStatus('finished');
+    }
+  };
+
   // Sort predictions by win probability to determine rank
   const sortedPredictions = [...predictions].sort((a, b) => b.winProbability - a.winProbability);
 
@@ -37,110 +76,184 @@ export const TrackVisualization: React.FC<TrackVisualizationProps> = ({ horses, 
       rankIndex = sortedPredictions.findIndex(p => p.horseName === horse.name);
     }
 
-    // Calculate X position based on Rank
-    // 1st place (Rank 0) is closest to finish (Right ~92%)
-    // Last place is furthest back (Left ~12%)
+    // --- Position Logic ---
     const totalHorses = horses.length || 1;
-    const spreadRange = 80; // Uses 80% of the width
+    const spreadRange = 80; 
     const step = totalHorses > 1 ? spreadRange / (totalHorses - 1) : 0;
     
-    // Default to start if no prediction, otherwise calculate linear position
-    // BaseX calculation: 92 (Finish) - (Rank * Step)
-    const baseX = rankIndex !== -1 ? 92 - (rankIndex * step) : 10;
+    // Final Target X (Static View & End of Sim)
+    // Winner lands at 92%, Last place lands further back
+    const finalTargetX = rankIndex !== -1 ? FINISH_LINE_X - (rankIndex * (step * 0.4)) : 10; 
+    // We reduced step multiplier (0.4) to keep them closer at the finish line like a real photo finish
+
+    let currentX = 0;
+
+    if (raceStatus === 'idle') {
+      // Idle: Show final result (Static)
+      currentX = finalTargetX;
+    } else {
+      // Racing: Interpolate
+      // Normalized progress 0.0 -> 1.0
+      const p = progress / 100;
+      
+      // Speed Variance:
+      // Winner moves linearly to 1.0
+      // Others move slightly slower to reach their target X at the same time T
+      
+      // Add "Wobble" / Randomness during the race
+      // Math.sin to create oscillation. Different frequency per horse.
+      const wobble = raceStatus === 'racing' 
+        ? Math.sin(p * 20 + index) * 2 * (1 - p) // Wobble decreases as they near finish
+        : 0;
+
+      // Base movement from Start to Final
+      const dist = finalTargetX - START_GATE_X;
+      
+      // Non-linear ease-out for dramatic finish? No, linear is better for race viz.
+      // But let's add a "spurt" logic.
+      // If rank is high (winner), they accelerate at the end.
+      // If rank is low, they fade.
+      
+      // Simple Linear + Wobble for now to ensure they end up correctly
+      currentX = START_GATE_X + (dist * p) + wobble;
+    }
     
-    // Tiny random offset for natural look, but keeping strict order visibility
-    const randomOffset = (Math.random() * 1.5) - 0.75;
+    // Tiny random offset for natural look (prevent exact overlap)
+    const staticOffset = (Math.random() * 0.5);
 
     // Y Position: Gate 1 at bottom (Inner Rail), Gate N at top (Outer Rail)
     const laneHeight = 80 / totalHorses; 
-    const yPos = 88 - (index * laneHeight); // 88% down to leave space for rail
+    const yPos = 88 - (index * laneHeight); 
+
+    // Bouncing effect (Gallop) during race
+    const bounce = raceStatus === 'racing' ? Math.abs(Math.sin(Date.now() / 100 + index)) * 1.5 : 0;
 
     return {
       ...horse,
       gateNo: index + 1,
       rank: rankIndex !== -1 ? rankIndex + 1 : '?',
-      x: Math.min(98, Math.max(2, baseX + randomOffset)),
-      y: yPos,
+      x: Math.min(98, Math.max(2, currentX + staticOffset)),
+      y: yPos - bounce,
+      isWinner: rankIndex === 0,
       prediction: pred
     };
   });
 
   return (
-    <div className="w-full bg-slate-800 border border-slate-600 rounded-xl overflow-hidden shadow-xl mt-4 md:mt-6">
-      <div className="p-3 md:p-4 bg-slate-800 border-b border-slate-600 flex justify-between items-center">
+    <div className="w-full bg-slate-800 border border-slate-600 rounded-xl overflow-hidden shadow-xl mt-4 md:mt-6 flex flex-col">
+      {/* Header & Controls */}
+      <div className="p-3 md:p-4 bg-slate-800 border-b border-slate-600 flex flex-wrap justify-between items-center gap-3">
         <h3 className="font-bold text-emerald-400 flex items-center gap-2 text-sm md:text-base">
-          <span className="text-lg md:text-xl">🏁</span> 예상 결승선 통과 순서
+          <Flag size={18} className="text-emerald-500" />
+          예상 경주 전개 시뮬레이션
         </h3>
-        <div className="hidden sm:flex gap-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
-          <span className="flex items-center gap-1">◀ 후미</span>
-          <span className="flex items-center gap-1">우승 ▶</span>
+        
+        <div className="flex items-center gap-2">
+          {raceStatus === 'idle' || raceStatus === 'finished' ? (
+             <button 
+               onClick={startSimulation}
+               className={`flex items-center gap-2 px-4 py-1.5 rounded-full font-bold text-xs md:text-sm transition-all shadow-lg 
+                 ${raceStatus === 'finished' 
+                   ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-500' 
+                   : 'bg-emerald-600 text-white hover:bg-emerald-500 border border-emerald-500 animate-pulse'}
+               `}
+             >
+               {raceStatus === 'finished' ? <RotateCcw size={14} /> : <Play size={14} fill="currentColor" />}
+               {raceStatus === 'finished' ? '다시 보기' : '경주 시뮬레이션 시작'}
+             </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full text-amber-400 text-xs md:text-sm font-bold">
+               <span className="w-2 h-2 bg-amber-500 rounded-full animate-ping"></span>
+               LIVE REPLAY
+            </div>
+          )}
         </div>
       </div>
       
       {/* Track Surface */}
-      <div className="relative w-full h-60 md:h-72 bg-[#2d5a35] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+      <div className="relative w-full h-64 md:h-80 bg-[#2d5a35] overflow-hidden shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
         
         {/* Grass Texture */}
         <div className="absolute inset-0 opacity-40" 
              style={{ backgroundImage: 'radial-gradient(#1a3c22 1px, transparent 1px)', backgroundSize: '16px 16px' }}>
         </div>
         
-        {/* Distance Lines */}
-        <div className="absolute top-0 bottom-0 left-[25%] w-px bg-white/20 border-l border-dashed border-white/40"></div>
-        <div className="absolute top-0 bottom-0 left-[50%] w-px bg-white/20 border-l border-dashed border-white/40"></div>
-        <div className="absolute top-0 bottom-0 left-[75%] w-px bg-white/20 border-l border-dashed border-white/40"></div>
+        {/* Distance Lines (Moving Effect?? No, camera is fixed for simplicity) */}
+        <div className="absolute top-0 bottom-0 left-[25%] w-px bg-white/10 border-l border-dashed border-white/30"></div>
+        <div className="absolute top-0 bottom-0 left-[50%] w-px bg-white/10 border-l border-dashed border-white/30"></div>
+        <div className="absolute top-0 bottom-0 left-[75%] w-px bg-white/10 border-l border-dashed border-white/30"></div>
         
         {/* Finish Line (Right side) */}
-        <div className="absolute top-0 bottom-0 right-8 md:right-12 w-6 md:w-8 bg-white/10 flex items-center justify-center">
-            <div className="h-full w-1 bg-red-500 shadow-[0_0_15px_rgba(239,68,68,1)] z-0"></div>
+        <div className="absolute top-0 bottom-0 right-8 md:right-12 w-6 md:w-8 bg-white/10 flex items-center justify-center z-10">
+            <div className="h-full w-1.5 bg-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.8)]"></div>
+            {/* Checkered pattern overlay */}
+            <div className="absolute inset-0 opacity-30" style={{backgroundImage: 'repeating-linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), repeating-linear-gradient(45deg, #000 25%, #fff 25%, #fff 75%, #000 75%, #000)', backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px'}}></div>
         </div>
-        <div className="absolute top-2 right-2 md:right-4 text-[8px] md:text-[10px] font-black text-red-400 tracking-widest rotate-90 origin-right">FINISH</div>
+        <div className="absolute top-2 right-2 md:right-4 text-[8px] md:text-[10px] font-black text-red-400 tracking-widest rotate-90 origin-right opacity-80">FINISH</div>
+
+        {/* Start Gate Line */}
+        <div className="absolute top-0 bottom-0 left-5 w-2 bg-white/20 border-r border-slate-400 z-10"></div>
 
         {/* Rails */}
-        <div className="absolute top-3 left-0 right-0 h-2 bg-slate-300 border-b-2 border-slate-400 shadow-md z-10"></div> {/* Outer Rail */}
-        <div className="absolute bottom-3 left-0 right-0 h-2 bg-slate-300 border-t-2 border-slate-400 shadow-md z-10"></div> {/* Inner Rail */}
+        <div className="absolute top-4 left-0 right-0 h-3 bg-gradient-to-b from-slate-300 to-slate-400 border-b-2 border-slate-500 shadow-md z-10"></div> {/* Outer Rail */}
+        <div className="absolute bottom-4 left-0 right-0 h-3 bg-gradient-to-t from-slate-300 to-slate-400 border-t-2 border-slate-500 shadow-md z-10"></div> {/* Inner Rail */}
 
         {/* Horses */}
         {visualData.map((horse, idx) => {
           const style = getGateStyle(idx);
-          const isWinner = horse.rank === 1;
+          const isWinner = horse.isWinner;
+          const showSpotlight = isWinner && (raceStatus === 'finished' || raceStatus === 'idle');
 
           return (
             <div 
               key={horse.id}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer transition-all duration-1000 ease-out z-20"
+              className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer z-20 will-change-transform"
               style={{ 
                 left: `${horse.x}%`, 
                 top: `${horse.y}%`,
-                zIndex: isWinner ? 30 : 20
+                zIndex: isWinner ? 30 : 20,
+                transition: raceStatus === 'racing' ? 'none' : 'left 1s ease-in-out, top 0.5s ease'
               }}
             >
+              {/* Winner Spotlight */}
+              {showSpotlight && (
+                 <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-8 h-20 bg-gradient-to-b from-yellow-400/30 to-transparent blur-md -z-10 animate-pulse"></div>
+              )}
+
               {/* Horse Marker */}
-              <div 
-                className={`
-                  w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center font-black text-xs md:text-sm border-2
-                  ${style.bg} ${style.text} ${style.border} ${style.shadow}
-                  group-hover:scale-125 transition-transform relative
-                  ${isWinner ? 'ring-2 md:ring-4 ring-emerald-500/50 scale-110' : ''}
-                `}
-              >
-                {horse.gateNo}
+              <div className="relative">
+                <div 
+                  className={`
+                    w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center font-black text-xs md:text-sm border-2 shadow-lg
+                    ${style.bg} ${style.text} ${style.border}
+                    ${showSpotlight ? 'ring-2 md:ring-4 ring-yellow-400/80 scale-110' : ''}
+                    transition-transform
+                  `}
+                >
+                  {horse.gateNo}
+                </div>
                 
-                {/* Speed Lines for leaders */}
-                {isWinner && (
-                  <div className={`absolute right-full top-1/2 -translate-y-1/2 w-6 md:w-8 h-4 md:h-6 bg-gradient-to-l from-white/40 to-transparent blur-[2px] -z-10 rounded-l-full`}></div>
+                {/* Dust Effect when racing */}
+                {raceStatus === 'racing' && (
+                  <div className="absolute top-1/2 right-full w-4 h-4 bg-yellow-100/20 blur-sm rounded-full animate-ping"></div>
+                )}
+                
+                {/* Winner Crown */}
+                {showSpotlight && (
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-yellow-400 drop-shadow-lg animate-bounce">
+                    <Trophy size={16} fill="currentColor" />
+                  </div>
                 )}
               </div>
 
-              {/* Tooltip on Hover (or Click on Touch) */}
-              <div className="absolute bottom-full mb-2 md:mb-3 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/95 text-white text-[10px] md:text-xs py-1 px-2 md:py-1.5 md:px-3 rounded-lg border border-slate-500 whitespace-nowrap z-50 pointer-events-none shadow-xl transform group-hover:-translate-y-1">
-                 <div className="flex items-center gap-2 mb-1">
-                   <span className={`w-3 h-3 md:w-4 md:h-4 rounded-full flex items-center justify-center text-[8px] md:text-[9px] font-bold ${style.bg} ${style.text}`}>{horse.gateNo}</span>
-                   <span className="font-bold">{horse.name}</span>
-                 </div>
-                 <span className="block text-emerald-400 font-mono text-center bg-slate-800 rounded px-1">
-                    예상 {horse.rank}위 ({horse.prediction?.winProbability}%)
-                 </span>
+              {/* Info Label (Visible on Hover or for Winner) */}
+              <div className={`
+                  absolute top-full mt-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap backdrop-blur-sm border border-white/10
+                  ${showSpotlight ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} 
+                  transition-opacity z-50
+              `}>
+                 <span className="font-bold">{horse.name}</span>
+                 {isWinner && <span className="ml-1 text-yellow-400 font-bold">1위</span>}
               </div>
             </div>
           );
@@ -148,7 +261,8 @@ export const TrackVisualization: React.FC<TrackVisualizationProps> = ({ horses, 
       </div>
       
       <div className="bg-slate-800 px-3 py-2 md:px-4 md:py-3 text-[10px] md:text-[11px] text-slate-400 flex justify-between border-t border-slate-600">
-        <span className="flex items-center gap-1 truncate">📌 우측(결승선)에 가까울수록 우승 확률이 높습니다.</span>
+        <span className="flex items-center gap-1">📌 {raceStatus === 'racing' ? '경주가 진행 중입니다!' : '버튼을 눌러 실제와 유사한 경주 전개를 시뮬레이션 하세요.'}</span>
+        {raceStatus === 'finished' && <span className="text-emerald-400 font-bold animate-pulse">예측 1위: {visualData.find(h=>h.isWinner)?.name}</span>}
       </div>
     </div>
   );

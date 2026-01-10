@@ -23,10 +23,14 @@ export interface PredictionResult {
   winProbability: number; // 0-100
   reasoning: string;
   predictedPosition: 'lead' | 'forward' | 'midfield' | 'backend'; // New field for track viz
+  starRating: number; // 1-5 scale
+  keyFactor: string; // e.g. "감량 이점", "거리 적성"
+  riskFactor: string; // e.g. "외곽 게이트", "공백기"
 }
 
 export interface AnalysisResponse {
   summary: string;
+  paceAnalysis: string; // New field: How the race will unfold (pace, leaders)
   predictions: PredictionResult[];
 }
 

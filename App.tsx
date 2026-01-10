@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Horse, RaceConditions, AnalysisResponse, Source, RaceData } from './types';
 import { INITIAL_RACE_CONDITIONS, MOCK_HORSES } from './constants';
 import { analyzeRace, analyzeRaceCardPDF } from './services/geminiService';
@@ -28,7 +28,9 @@ import {
   Calendar,
   List,
   ExternalLink,
-  Download
+  Download,
+  Wind,
+  Settings2
 } from 'lucide-react';
 
 const getGateColorClass = (index: number) => {
@@ -67,19 +69,22 @@ const App: React.FC = () => {
   const [sources, setSources] = useState<Source[]>([]);
   const [pdfFileName, setPdfFileName] = useState<string | null>(null);
   const [installPrompt, setInstallPrompt] = useState<any>(null); // PWA Install Prompt
+  const [isConditionsDirty, setIsConditionsDirty] = useState(false); // Track if user modified conditions manually
 
   // Timer State
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isRaceFinished, setIsRaceFinished] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>('');
+  
+  // Refs
+  const lastAutoSwitchRaceId = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Manual Add Form
   const [isAdding, setIsAdding] = useState(false);
   const [newHorse, setNewHorse] = useState<Partial<Horse>>({
     name: '', jockey: '', age: 3, weight: 450, recentHistory: '', notes: ''
   });
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Helpers ---
   const getRaceKey = (location: string, raceNumber: number) => {
@@ -116,6 +121,38 @@ const App: React.FC = () => {
       : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600';
   };
 
+  // --- Analysis Handler ---
+  // Memoized to be used in effects
+  const performAnalysis = useCallback(async (raceData: RaceData, force = false) => {
+    const key = getRaceKey(raceData.conditions.location, raceData.conditions.raceNumber);
+    
+    // If already cached and not forced, don't re-run
+    // But we check cache in the useEffect as well. 
+    // This is double safety, or for manual triggers.
+    if (!force && analysisCache[key]) {
+      setResult(analysisCache[key]);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const analysis = await analyzeRace(raceData.horses, raceData.conditions);
+      setResult(analysis);
+      setAnalysisCache(prev => ({
+        ...prev,
+        [key]: analysis
+      }));
+      // If successful, reset dirty state
+      setIsConditionsDirty(false);
+    } catch (err: any) {
+      console.error(err);
+      setError("경기 분석에 실패했습니다. " + (err.message || "다시 시도해주세요."));
+    } finally {
+      setLoading(false);
+    }
+  }, [analysisCache]);
+
   // --- Effects ---
 
   // PWA Install Prompt Listener
@@ -143,61 +180,89 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Update View when Race Selection Changes
+  // Update View when Race Selection Changes AND Auto-Analyze
   useEffect(() => {
     if (allRaces.length > 0 && allRaces[currentRaceIdx]) {
       const race = allRaces[currentRaceIdx];
       setHorses(race.horses);
       setConditions(race.conditions);
+      setIsConditionsDirty(false); // Reset dirty state on race switch
       
-      // Check cache for prediction using composite key
       const key = getRaceKey(race.conditions.location, race.conditions.raceNumber);
+      
+      // Check cache first
       if (analysisCache[key]) {
         setResult(analysisCache[key]);
+        setError(null);
       } else {
         setResult(null); 
-        // We can optionally auto-analyze if needed, but manual is cost-safer
+        // Auto Analyze if not in cache!
+        if (!loading) {
+            performAnalysis(race);
+        }
       }
-      setError(null);
     }
-  }, [currentRaceIdx, allRaces, analysisCache]);
+  }, [currentRaceIdx, allRaces, analysisCache, performAnalysis]);
 
-  // Timer Logic & Auto Selection
+  // Timer Logic & Auto Selection (Auto-Advance 15 mins before)
   useEffect(() => {
-    if (!conditions.raceTime) {
-      setTimeLeft('');
-      return;
-    }
-
-    const calculateTimeLeft = () => {
-      const now = new Date().getTime();
-      const raceTime = new Date(conditions.raceTime!).getTime();
-      
-      if (isNaN(raceTime)) {
-          setTimeLeft('시간 정보 없음');
-          return;
-      }
-
-      const difference = raceTime - now;
-
-      if (difference > 0) {
-        setIsRaceFinished(false);
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-        setTimeLeft(`${hours > 0 ? `${hours}시간 ` : ''}${minutes}분 ${seconds}초 전`);
+    const checkTimer = () => {
+      // 1. Update Time Left Display
+      if (!conditions.raceTime) {
+        setTimeLeft('');
       } else {
-        setIsRaceFinished(true);
-        const minutesPast = Math.abs(Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)));
-        const secondsPast = Math.abs(Math.floor((difference % (1000 * 60)) / 1000));
-        setTimeLeft(`진행 중 (${minutesPast}분 ${secondsPast}초 경과)`);
+        const now = new Date().getTime();
+        const raceTime = new Date(conditions.raceTime!).getTime();
+        
+        if (isNaN(raceTime)) {
+            setTimeLeft('시간 정보 없음');
+        } else {
+          const difference = raceTime - now;
+
+          if (difference > 0) {
+            setIsRaceFinished(false);
+            const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+            setTimeLeft(`${hours > 0 ? `${hours}시간 ` : ''}${minutes}분 ${seconds}초 전`);
+          } else {
+            setIsRaceFinished(true);
+            const minutesPast = Math.abs(Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)));
+            const secondsPast = Math.abs(Math.floor((difference % (1000 * 60)) / 1000));
+            setTimeLeft(`진행 중 (${minutesPast}분 ${secondsPast}초 경과)`);
+          }
+        }
       }
+
+      // 2. Check for Auto-Switch Trigger (Approx 15 mins before start)
+      const now = Date.now();
+      const TRIGGER_MINUTES = 15;
+      const TRIGGER_MS = TRIGGER_MINUTES * 60 * 1000;
+
+      allRaces.forEach((race, idx) => {
+        if (!race.conditions.raceTime) return;
+        const rTime = new Date(race.conditions.raceTime).getTime();
+        const msUntilStart = rTime - now;
+        
+        // Trigger window: between 14m 58s and 15m 02s (to ensure we catch it once)
+        // AND we must ensure we haven't already auto-switched to this race to prevent annoying loops
+        if (msUntilStart > (TRIGGER_MS - 2000) && msUntilStart < (TRIGGER_MS + 2000)) {
+           const raceKey = getRaceKey(race.conditions.location, race.conditions.raceNumber);
+           
+           if (currentRaceIdx !== idx && lastAutoSwitchRaceId.current !== raceKey) {
+               console.log(`Auto-switching to ${race.conditions.location} ${race.conditions.raceNumber}R (${TRIGGER_MINUTES} mins left)`);
+               lastAutoSwitchRaceId.current = raceKey;
+               setCurrentRaceIdx(idx); 
+               // Changing currentRaceIdx triggers the other useEffect which calls performAnalysis
+           }
+        }
+      });
     };
 
-    calculateTimeLeft();
-    const timer = setInterval(calculateTimeLeft, 1000);
+    checkTimer();
+    const timer = setInterval(checkTimer, 1000);
     return () => clearInterval(timer);
-  }, [conditions.raceTime]);
+  }, [conditions.raceTime, allRaces, currentRaceIdx]);
 
   // --- Handlers ---
 
@@ -248,11 +313,10 @@ const App: React.FC = () => {
           const now = new Date().getTime();
           let nextRaceIdx = 0;
           
-          // Find first race that hasn't started or started within last 5 mins
+          // Find first race that hasn't started or started within last 10 mins
           const upcoming = races.findIndex(r => {
              if (!r.conditions.raceTime) return false;
              const rTime = new Date(r.conditions.raceTime).getTime();
-             // Include races started within last 10 mins as "active"
              return rTime > now - (10 * 60 * 1000);
           });
 
@@ -262,10 +326,7 @@ const App: React.FC = () => {
 
           setCurrentRaceIdx(nextRaceIdx);
           
-          // Automatically analyze the selected race to give immediate value
-          if (races[nextRaceIdx].horses.length > 0) {
-             performAnalysis(races[nextRaceIdx]);
-          }
+          // performAnalysis will be triggered by the useEffect automatically now
 
         } catch (err: any) {
           console.error(err);
@@ -283,39 +344,14 @@ const App: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const performAnalysis = async (raceData: RaceData) => {
-    // If already cached, don't re-run
-    const key = getRaceKey(raceData.conditions.location, raceData.conditions.raceNumber);
-    if (analysisCache[key]) {
-      setResult(analysisCache[key]);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const analysis = await analyzeRace(raceData.horses, raceData.conditions);
-      setResult(analysis);
-      setAnalysisCache(prev => ({
-        ...prev,
-        [key]: analysis
-      }));
-    } catch (err: any) {
-      console.error(err);
-      setError("경기 분석에 실패했습니다. " + (err.message || "다시 시도해주세요."));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleManualAnalyze = () => {
-    if (allRaces[currentRaceIdx]) {
-      performAnalysis(allRaces[currentRaceIdx]);
-    } else {
-        // Fallback for manual horse entry mode
-        const manualRaceData = { conditions, horses };
-        performAnalysis(manualRaceData as RaceData);
-    }
+  const handleManualAnalyze = (force = false) => {
+    // Always use current state 'conditions' and 'horses'
+    // This allows re-analysis with modified conditions
+    const currentData: RaceData = {
+        conditions: conditions,
+        horses: horses
+    };
+    performAnalysis(currentData, force);
   };
 
   const handleAddHorse = () => {
@@ -336,6 +372,11 @@ const App: React.FC = () => {
 
   const handleDeleteHorse = (id: string) => {
     setHorses(horses.filter(h => h.id !== id));
+  };
+
+  const updateCondition = (key: keyof RaceConditions, value: any) => {
+    setConditions(prev => ({ ...prev, [key]: value }));
+    setIsConditionsDirty(true);
   };
 
   return (
@@ -515,25 +556,73 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            {/* Middle: Race Conditions */}
-            <div className="flex-1 p-3 md:p-5 grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4 items-center w-full md:w-2/3">
-               <div className="flex flex-col gap-0.5 md:gap-1">
-                 <span className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><Ruler size={10} className="md:w-3 md:h-3"/> 거리</span>
-                 <span className="font-bold text-base md:text-lg">{conditions.distance}m</span>
-               </div>
-               <div className="flex flex-col gap-0.5 md:gap-1">
-                 <span className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><Thermometer size={10} className="md:w-3 md:h-3"/> 주로</span>
-                 <span className="font-bold text-sm md:text-lg truncate" title={conditions.trackCondition}>{conditions.trackCondition}</span>
-               </div>
-               <div className="flex flex-col gap-0.5 md:gap-1">
-                 <span className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><CloudSun size={10} className="md:w-3 md:h-3"/> 날씨</span>
-                 <span className="font-bold text-sm md:text-lg truncate" title={conditions.weather}>{conditions.weather}</span>
-               </div>
-               <div className="flex flex-col gap-0.5 md:gap-1 pl-4 border-l border-slate-700/50">
-                  <span className="text-[10px] md:text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1">남은시간</span>
-                  <div className={`text-base md:text-xl font-black font-mono tracking-tight flex items-center gap-2 ${isRaceFinished ? 'text-amber-400' : 'text-white'}`}>
-                     {timeLeft || '--:--'}
+            {/* Middle: Race Conditions (Editable) */}
+            <div className="flex-1 p-3 md:p-5 flex flex-col justify-between w-full md:w-2/3">
+               <div className="grid grid-cols-3 gap-3 md:gap-4 items-end mb-4">
+                  {/* Distance */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><Ruler size={10} className="md:w-3 md:h-3"/> 거리(m)</label>
+                    <input 
+                      type="number" 
+                      value={conditions.distance}
+                      onChange={(e) => updateCondition('distance', parseInt(e.target.value))}
+                      className="bg-slate-950 border border-slate-700 text-white text-sm md:text-base font-bold rounded focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 block w-full p-1.5 md:p-2 outline-none transition-colors"
+                    />
                   </div>
+
+                  {/* Track Condition */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><Thermometer size={10} className="md:w-3 md:h-3"/> 주로 상태</label>
+                    <select 
+                      value={conditions.trackCondition.split('(')[0].trim()} 
+                      onChange={(e) => updateCondition('trackCondition', e.target.value)}
+                      className="bg-slate-950 border border-slate-700 text-white text-sm md:text-base font-bold rounded focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 block w-full p-1.5 md:p-2 outline-none transition-colors appearance-none"
+                    >
+                      <option value="건조">건조 (1~5%)</option>
+                      <option value="양호">양호 (6~9%)</option>
+                      <option value="다습">다습 (10~14%)</option>
+                      <option value="포화">포화 (15~19%)</option>
+                      <option value="불량">불량 (20%~)</option>
+                    </select>
+                  </div>
+
+                  {/* Weather */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] md:text-xs text-slate-500 flex items-center gap-1"><CloudSun size={10} className="md:w-3 md:h-3"/> 날씨</label>
+                    <select 
+                      value={conditions.weather}
+                      onChange={(e) => updateCondition('weather', e.target.value)}
+                      className="bg-slate-950 border border-slate-700 text-white text-sm md:text-base font-bold rounded focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 block w-full p-1.5 md:p-2 outline-none transition-colors appearance-none"
+                    >
+                       <option value="맑음">맑음 ☀️</option>
+                       <option value="흐림">흐림 ☁️</option>
+                       <option value="비">비 ☔</option>
+                       <option value="눈">눈 ❄️</option>
+                       <option value="강풍">강풍 💨</option>
+                    </select>
+                  </div>
+               </div>
+
+               <div className="flex items-center justify-between border-t border-slate-700/50 pt-3">
+                   <div className="flex flex-col">
+                      <span className="text-[10px] md:text-xs text-emerald-400 font-bold uppercase tracking-wider mb-0.5">남은시간</span>
+                      <div className={`text-sm md:text-base font-black font-mono tracking-tight ${isRaceFinished ? 'text-amber-400' : 'text-white'}`}>
+                         {timeLeft || '--:--'}
+                      </div>
+                   </div>
+
+                   <button 
+                     onClick={() => handleManualAnalyze(true)}
+                     className={`
+                        flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all shadow-lg
+                        ${isConditionsDirty 
+                          ? 'bg-amber-500 hover:bg-amber-400 text-black animate-pulse' 
+                          : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}
+                     `}
+                   >
+                     {loading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16} />}
+                     {isConditionsDirty ? '조건 변경 후 재분석' : '실시간 재분석'}
+                   </button>
                </div>
             </div>
           </div>
@@ -554,7 +643,7 @@ const App: React.FC = () => {
           <div className="lg:col-span-8 space-y-4">
              <div className="flex items-center justify-between">
                 <h2 className="text-base md:text-lg font-bold text-white flex items-center gap-2">
-                  <List size={18} className="text-amber-400"/> 출전표
+                  <List size={18} className="text-amber-400"/> 출전표 및 분석
                 </h2>
                 <div className="flex gap-2">
                   <button 
@@ -600,7 +689,9 @@ const App: React.FC = () => {
                   </div>
                   <div className="text-center space-y-2">
                     <h3 className="text-lg font-bold text-white">AI가 {conditions.raceNumber}경기를 분석 중입니다</h3>
-                    <p className="text-sm text-slate-400">데이터를 정밀 분석하고 있습니다.<br/>잠시만 기다려주세요.</p>
+                    <p className="text-sm text-slate-400">
+                      {isConditionsDirty ? "변경된 조건(날씨/주로)을 반영하여\n다시 분석하고 있습니다." : "데이터를 정밀 분석하고 있습니다."}
+                    </p>
                   </div>
                </div>
             ) : result ? (
@@ -650,6 +741,21 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Pace Analysis (New) */}
+                  {result.paceAnalysis && (
+                    <div>
+                       <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
+                          <Wind size={14} className="text-blue-400" />
+                          경주 흐름 (Pace)
+                       </h4>
+                       <div className="bg-blue-900/20 border border-blue-900/40 rounded-xl p-4">
+                          <p className="text-slate-200 text-sm leading-6 text-justify">
+                            {result.paceAnalysis}
+                          </p>
+                       </div>
+                    </div>
+                  )}
+
                   {/* Summary */}
                   <div>
                     <h4 className="text-slate-400 font-bold mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
@@ -679,7 +785,7 @@ const App: React.FC = () => {
                 <div className="hidden lg:flex flex-col items-center justify-center h-64 bg-slate-800/30 border-2 border-dashed border-slate-700 rounded-xl text-slate-500 gap-4 mt-12">
                    {allRaces.length > 0 ? (
                       <button 
-                        onClick={handleManualAnalyze}
+                        onClick={() => handleManualAnalyze(true)}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-full font-bold shadow-lg transition-all transform hover:scale-105"
                       >
                         {conditions.raceNumber}경주 AI 분석 시작하기

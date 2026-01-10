@@ -1,6 +1,6 @@
 import React from 'react';
 import { Horse, PredictionResult } from '../types';
-import { Trash2, TrendingUp, User, Weight, Calendar } from 'lucide-react';
+import { Trash2, TrendingUp, User, Weight, Calendar, Star, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface RaceTableProps {
   horses: Horse[];
@@ -25,6 +25,20 @@ const getGateStyle = (index: number) => {
   return styles[index % styles.length];
 };
 
+const StarRating = ({ rating }: { rating: number }) => {
+  return (
+    <div className="flex gap-0.5">
+      {[...Array(5)].map((_, i) => (
+        <Star 
+          key={i} 
+          size={12} 
+          className={i < rating ? "fill-amber-400 text-amber-400" : "fill-slate-700 text-slate-700"} 
+        />
+      ))}
+    </div>
+  );
+};
+
 export const RaceTable: React.FC<RaceTableProps> = ({ horses, predictions, onDelete }) => {
   const getPrediction = (name: string) => {
     return predictions?.find(p => p.horseName === name);
@@ -37,11 +51,12 @@ export const RaceTable: React.FC<RaceTableProps> = ({ horses, predictions, onDel
         <table className="w-full text-sm text-left text-slate-300">
           <thead className="text-xs uppercase bg-slate-900/80 text-slate-400 border-b border-slate-700">
             <tr>
-              <th scope="col" className="px-4 py-3 text-center w-16">No</th>
-              <th scope="col" className="px-4 py-3">마명 / 기수</th>
-              <th scope="col" className="px-4 py-3 text-center">정보 (나이/중량)</th>
-              <th scope="col" className="px-4 py-3">최근 성적 & 특징</th>
-              {predictions && <th scope="col" className="px-4 py-3 w-48">AI 예측 (우승확률)</th>}
+              <th scope="col" className="px-4 py-3 text-center w-14">No</th>
+              <th scope="col" className="px-4 py-3 w-48">마명 / 기수</th>
+              <th scope="col" className="px-4 py-3 text-center w-24">정보</th>
+              {predictions && <th scope="col" className="px-4 py-3 w-32">AI 평가</th>}
+              <th scope="col" className="px-4 py-3">분석 포인트</th>
+              {predictions && <th scope="col" className="px-4 py-3 w-32">우승확률</th>}
               <th scope="col" className="px-4 py-3 text-center w-12">관리</th>
             </tr>
           </thead>
@@ -74,20 +89,53 @@ export const RaceTable: React.FC<RaceTableProps> = ({ horses, predictions, onDel
                     </div>
                   </td>
 
-                  {/* History & Notes */}
+                  {/* AI Rating */}
+                  {predictions && (
+                    <td className="px-4 py-3">
+                      {prediction ? (
+                         <div className="flex flex-col gap-1">
+                           <StarRating rating={prediction.starRating || 0} />
+                           <span className="text-[10px] text-slate-500">{prediction.starRating || 0} / 5</span>
+                         </div>
+                      ) : <span className="text-slate-600">-</span>}
+                    </td>
+                  )}
+
+                  {/* Detailed Analysis Points */}
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-amber-400 font-mono font-medium">{horse.recentHistory}</span>
+                    <div className="space-y-1.5">
+                       {/* Basic Info / Recent History */}
+                       <div className="flex items-center gap-2">
+                          <span className="text-amber-400 font-mono font-medium text-xs">{horse.recentHistory}</span>
+                       </div>
+                       
+                       {/* Advanced Factors */}
+                       {prediction && (
+                         <div className="flex flex-wrap gap-2 text-[11px]">
+                            {prediction.keyFactor && (
+                              <span className="flex items-center gap-1 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                <CheckCircle2 size={10} /> {prediction.keyFactor}
+                              </span>
+                            )}
+                            {prediction.riskFactor && (
+                              <span className="flex items-center gap-1 bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">
+                                <AlertCircle size={10} /> {prediction.riskFactor}
+                              </span>
+                            )}
+                         </div>
+                       )}
+                       
+                       {/* Notes */}
+                       {horse.notes && (
+                        <div className="text-[11px] text-slate-500 italic flex items-start gap-1">
+                          <TrendingUp size={10} className="mt-0.5" />
+                          {horse.notes}
+                        </div>
+                       )}
                     </div>
-                    {horse.notes && (
-                      <div className="text-xs text-slate-500 italic flex items-start gap-1">
-                        <TrendingUp size={10} className="mt-0.5" />
-                        {horse.notes}
-                      </div>
-                    )}
                   </td>
 
-                  {/* Prediction Bar */}
+                  {/* Win Probability */}
                   {predictions && (
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
@@ -152,14 +200,33 @@ export const RaceTable: React.FC<RaceTableProps> = ({ horses, predictions, onDel
                    </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-1 text-[11px] bg-slate-700/50 px-2 py-1 rounded text-slate-300">
-                    <Calendar size={10} /> {horse.age}세
-                  </div>
-                   <div className="flex items-center gap-1 text-[11px] bg-slate-700/50 px-2 py-1 rounded text-slate-300">
-                    <Weight size={10} /> {horse.weight}kg
+                  {prediction && <StarRating rating={prediction.starRating || 0} />}
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-1 text-[11px] bg-slate-700/50 px-2 py-1 rounded text-slate-300">
+                      <Calendar size={10} /> {horse.age}세
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] bg-slate-700/50 px-2 py-1 rounded text-slate-300">
+                      <Weight size={10} /> {horse.weight}kg
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* Factors for Mobile */}
+              {prediction && (
+                 <div className="flex gap-2 mb-3">
+                    {prediction.keyFactor && (
+                      <span className="flex-1 flex items-center justify-center gap-1 bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20 text-[10px] font-bold">
+                        <CheckCircle2 size={10} /> {prediction.keyFactor}
+                      </span>
+                    )}
+                    {prediction.riskFactor && (
+                      <span className="flex-1 flex items-center justify-center gap-1 bg-red-500/10 text-red-400 px-2 py-1 rounded border border-red-500/20 text-[10px] font-bold">
+                        <AlertCircle size={10} /> {prediction.riskFactor}
+                      </span>
+                    )}
+                 </div>
+              )}
 
               {/* Prediction Bar Mobile */}
               {predictions && (
