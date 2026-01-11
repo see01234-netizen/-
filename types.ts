@@ -5,33 +5,47 @@ export interface Horse {
   jockey: string;
   age: number;
   weight: number;
-  recentHistory: string; // e.g., "1st, 3rd, 5th"
+  recentHistory: string; 
   notes: string;
 }
 
 export interface RaceConditions {
-  raceNumber: number; // Added to identify race (e.g., 1, 2, 3...)
-  distance: number; // in meters
-  trackCondition: string; // e.g., Dry, Wet, Muddy
+  raceNumber: number; 
+  distance: number; 
+  trackCondition: string; 
   weather: string;
   location: string;
-  raceTime?: string; // YYYY-MM-DD HH:mm format
+  raceTime?: string; 
+  trackBias?: 'lead' | 'closer' | 'inside' | 'outside' | 'neutral'; // New: Today's flow
 }
 
 export interface PredictionResult {
   horseName: string;
-  winProbability: number; // 0-100
+  winProbability: number; 
   reasoning: string;
-  predictedPosition: 'lead' | 'forward' | 'midfield' | 'backend'; // New field for track viz
-  starRating: number; // 1-5 scale
-  keyFactor: string; // e.g. "감량 이점", "거리 적성"
-  riskFactor: string; // e.g. "외곽 게이트", "공백기"
+  predictedPosition: 'lead' | 'forward' | 'midfield' | 'backend';
+  starRating: number; 
+  keyFactor: string; 
+  riskFactor: string; 
+}
+
+export interface BettingRecommendations {
+  topFiveNames: string[];
+  quinella: string[]; 
+  trio: string[];     
+  strategyNote: string; 
 }
 
 export interface AnalysisResponse {
   summary: string;
-  paceAnalysis: string; // New field: How the race will unfold (pace, leaders)
+  paceAnalysis: string; 
   predictions: PredictionResult[];
+  bettingRecommendations: BettingRecommendations;
+  confidenceScore: number; // 0-100: How certain the AI is
+  keyVariable: string;    // The single most important factor for this race
+  sources?: { title: string; uri: string }[]; 
+  appliedWeather: string;        
+  appliedTrackCondition: string; 
 }
 
 export interface RaceData {
@@ -42,17 +56,4 @@ export interface RaceData {
 export interface Source {
   title: string;
   uri: string;
-}
-
-export interface FetchRaceResult {
-  data: RaceData;
-  sources: Source[];
-}
-
-export interface HistoryItem {
-  id: string;
-  timestamp: number; // When the analysis was performed
-  conditions: RaceConditions;
-  horses: Horse[];
-  result: AnalysisResponse;
 }

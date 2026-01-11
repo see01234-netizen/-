@@ -41,9 +41,9 @@ export const PredictionChart: React.FC<PredictionChartProps> = ({ data, horses }
         y={y} 
         dy={4} 
         textAnchor="end" 
-        fill="#cbd5e1" 
-        fontSize={12} 
-        fontWeight={600}
+        fill="#ffffff" 
+        fontSize={13} 
+        fontWeight={700}
       >
         {payload.value}
       </Text>
@@ -61,14 +61,14 @@ export const PredictionChart: React.FC<PredictionChartProps> = ({ data, horses }
           layout="vertical"
           margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} opacity={0.3} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={true} vertical={false} opacity={0.5} />
           <XAxis type="number" domain={[0, 100]} hide />
           <YAxis 
             type="category" 
             dataKey="displayName" 
             width={100}
             tick={renderCustomAxisTick}
-            stroke="#475569"
+            stroke="#94a3b8"
             interval={0} 
             tickLine={false}
             axisLine={false}
@@ -76,10 +76,10 @@ export const PredictionChart: React.FC<PredictionChartProps> = ({ data, horses }
           <Tooltip
             cursor={{ fill: '#1e293b', opacity: 0.5 }}
             contentStyle={{ 
-              backgroundColor: '#0f172a', 
+              backgroundColor: '#020617', 
               borderColor: '#334155', 
               borderRadius: '8px', 
-              color: '#f8fafc',
+              color: '#ffffff',
               boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
             }}
             itemStyle={{ color: '#10b981' }}
